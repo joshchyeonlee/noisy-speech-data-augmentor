@@ -4,6 +4,7 @@ import random
 import numpy as np
 import soundfile as sf
 from glob import glob
+from scipy.ndimage import shift
 
 import librosa
 import librosa.display
@@ -123,8 +124,8 @@ def secondOrderAllpassFilter(breakFreq, bandwidth, sampleRate):
 
 
 # modified from https://thewolfsound.com/allpass-based-bandstop-and-bandpass-filters/
-def createBandPassFilter(sampleRate, duration, centerFrequency, Q):
-    inputSignal = generateWhiteNoise(duration, sampleRate)
+def createBandPassFilter(inputSignal, sampleRate, centerFrequency, Q):
+    # inputSignal = generateWhiteNoise(duration, sampleRate)
     allpass = np.zeros_like(inputSignal)
 
     # previous and second last iteration inputs and outputs
@@ -149,11 +150,12 @@ def createBandPassFilter(sampleRate, duration, centerFrequency, Q):
 
     sign = -1
     output = 0.5 * (inputSignal + sign * allpass)
-    sf.write("bandpass.wav", output, sampleRate)
+    # sf.write("bandpass.wav", output, sampleRate)
+    return output
 
 
 def normalize():
-    audioData, sr = librosa.load(audioInputFile[0])
+    audioData, _ = librosa.load(audioInputFile[0])
     max = np.max(audioData)
     min = np.min(audioData)
     
@@ -164,11 +166,69 @@ def normalize():
     print(scale)
     audioData *= scale
     
+# p < 0.01 recommended
+def cutoutEffect(audioData, probability = 0.0003):
+    # audioData, sr = librosa.load(audioInputFile[0])
+    length = len(audioData)
+
+    cut = np.random.choice([0,1],length,p=[probability,1 - probability])
+    i = 0
+    
+    while i < length:
+        if cut[i] == 0:
+            randomLength = random.randrange(int(length * probability * 50))
+            for x in range(randomLength):
+                if i >= length:
+                    break
+                cut[i] = 0
+                i += 1
+        i += 1
+    
+    audioData *= cut
+    return audioData
+    
+    
+def delayFilter(delayTime = 500, feedback = 0.4):
+    audioData, sr = librosa.load(audioInputFile[0])
+    
+    geometric = np.geomspace(1, 2, audioData.shape[0])
+    geometric -= 1
+
+    delayPoint = int((delayTime * sr) / 1000)
+    iteration = 1
+    
+    rawAudio = np.copy(audioData)
+    
+    while feedback < 1:
+        delayAmount = geometric[int(len(geometric) * feedback)]
+        delayAudio = rawAudio * delayAmount
+        delayAudio = shift(delayAudio, (delayPoint * iteration), cval=0)
+        
+        audioData += delayAudio
+        feedback *= feedback + 1
+        iteration += 1
+    
+    sf.write("delay.wav", audioData, sr)
+    
+def phoneEffect():
+    audioData, sr = librosa.load(audioInputFile[0])
+    max = np.max(audioData)
+    print(max)
+    audioData = cutoutEffect(audioData)
+    audioData = createBandPassFilter(audioData, sr, 2000, 3)
+    audioData = createBandPassFilter(audioData, sr, 400, 3)
+    
+    newMax = np.max(audioData)
+    audioData *= (max / newMax)
+    sf.write("phone.wav", audioData, sr)
 
 def main():
     parseArgs(sys.argv)
     random.seed()
-    normalize()
+    # delayFilter(500, 0.4)
+    phoneEffect()
+    # cutoutEffect()
+    # normalize()
     # addWhiteNoise()
     # createBrownNoise(44100, 5)
     # createBandPassFilter(44100, 5, 700, 3)
