@@ -105,13 +105,11 @@ def allpassBasedFilter(input, cutoff, sampleRate, highpass=False, amplitude=1.0)
 
 
 # Based off of https://thewolfsound.com/allpass-based-lowpass-and-highpass-filters/
-def createBrownNoise(sampleRate, duration):
+def lowPassFilter(sampleRate, duration):
     inputSignal = generateWhiteNoise(duration, sampleRate)
     cutoff = np.full(inputSignal.shape[0], 3000)
     output = allpassBasedFilter(inputSignal, cutoff, sampleRate, False, amplitude=0.1)
-    sf.write("brown.wav", output, sampleRate)
-    sf.write("white.wav", generateWhiteNoise(duration, sampleRate), sampleRate)
-
+    return output
 
 def secondOrderAllpassFilter(breakFreq, bandwidth, sampleRate):
     tan = np.tan(np.pi * bandwidth / sampleRate)
@@ -124,8 +122,7 @@ def secondOrderAllpassFilter(breakFreq, bandwidth, sampleRate):
 
 
 # modified from https://thewolfsound.com/allpass-based-bandstop-and-bandpass-filters/
-def createBandPassFilter(inputSignal, sampleRate, centerFrequency, Q):
-    # inputSignal = generateWhiteNoise(duration, sampleRate)
+def bandPassFilter(inputSignal, sampleRate, centerFrequency, Q):
     allpass = np.zeros_like(inputSignal)
 
     # previous and second last iteration inputs and outputs
@@ -150,23 +147,20 @@ def createBandPassFilter(inputSignal, sampleRate, centerFrequency, Q):
 
     sign = -1
     output = 0.5 * (inputSignal + sign * allpass)
-    # sf.write("bandpass.wav", output, sampleRate)
     return output
 
 
-def normalize():
-    audioData, _ = librosa.load(audioInputFile[0])
+def normalize(audioData):
     max = np.max(audioData)
     min = np.min(audioData)
     
     peak = np.absolute(max) if np.absolute(max) > np.absolute(min) else np.absolute(min)
     
     scale = 1 / peak
-    print(peak)
-    print(scale)
     audioData *= scale
+    return audioData
     
-# p < 0.01 recommended
+# p < 0.001 recommended
 def cutoutEffect(audioData, probability = 0.0003):
     # audioData, sr = librosa.load(audioInputFile[0])
     length = len(audioData)
@@ -208,15 +202,15 @@ def delayFilter(delayTime = 500, feedback = 0.4):
         feedback *= feedback + 1
         iteration += 1
     
-    sf.write("delay.wav", audioData, sr)
+    return audioData
     
 def phoneEffect():
     audioData, sr = librosa.load(audioInputFile[0])
     max = np.max(audioData)
     print(max)
     audioData = cutoutEffect(audioData)
-    audioData = createBandPassFilter(audioData, sr, 2000, 3)
-    audioData = createBandPassFilter(audioData, sr, 400, 3)
+    audioData = bandPassFilter(audioData, sr, 2000, 3)
+    audioData = bandPassFilter(audioData, sr, 400, 3)
     
     newMax = np.max(audioData)
     audioData *= (max / newMax)
@@ -230,8 +224,8 @@ def main():
     # cutoutEffect()
     # normalize()
     # addWhiteNoise()
-    # createBrownNoise(44100, 5)
-    # createBandPassFilter(44100, 5, 700, 3)
+    # lowpassFilter(44100, 5)
+    # bandPassFilter(44100, 5, 700, 3)
 
 
 if __name__ == "__main__":
