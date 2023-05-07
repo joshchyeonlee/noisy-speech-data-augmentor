@@ -8,7 +8,7 @@ from glob import glob
 import librosa
 import librosa.display
 
-argVector = {"input": "samples", "output": "outputs", "white noise": 0.5}
+argVector = {"input": "samples", "output": "outputs", "white noise": 0.5, "band pass": 400}
 
 global audioInputFile, outputPath
 
@@ -26,12 +26,16 @@ def parseArgs(argv):
                 i = i + 1
                 argVector["output"] = argv[i]
             elif argv[i] == "-w":
-                argVector["white noise"] = True
+                i = i + 1
+                argVector["white noise"] = argv[i]
+            elif argv[i] == "-b":
+                i = i + 1
+                argVector["band pass"] = argv[i]
             else:
-                print("Failed while parsing output. Please try again")
+                print("Failed while parsing input. Please try again")
                 exit()
         except:
-            print("Failed while parsing output. Please try again")
+            print("Failed while parsing input. Please try again")
             exit()
         i = i + 1
 
@@ -119,10 +123,7 @@ def secondOrderAllpassFilter(breakFreq, bandwidth, sampleRate):
 
 
 # modified from https://thewolfsound.com/allpass-based-bandstop-and-bandpass-filters/
-def createBandPassFilter(sampleRate, duration, centerFrequency):
-    sampleLength = int(sampleRate * duration)
-    Q = 3
-
+def createBandPassFilter(sampleRate, duration, centerFrequency, Q):
     inputSignal = generateWhiteNoise(duration, sampleRate)
     allpass = np.zeros_like(inputSignal)
 
@@ -151,12 +152,26 @@ def createBandPassFilter(sampleRate, duration, centerFrequency):
     sf.write("bandpass.wav", output, sampleRate)
 
 
+def normalize():
+    audioData, sr = librosa.load(audioInputFile[0])
+    max = np.max(audioData)
+    min = np.min(audioData)
+    
+    peak = np.absolute(max) if np.absolute(max) > np.absolute(min) else np.absolute(min)
+    
+    scale = 1 / peak
+    print(peak)
+    print(scale)
+    audioData *= scale
+    
+
 def main():
     parseArgs(sys.argv)
     random.seed()
+    normalize()
     # addWhiteNoise()
-    createBrownNoise(44100, 5)
-    createBandPassFilter(44100, 5, 700)
+    # createBrownNoise(44100, 5)
+    # createBandPassFilter(44100, 5, 700, 3)
 
 
 if __name__ == "__main__":
