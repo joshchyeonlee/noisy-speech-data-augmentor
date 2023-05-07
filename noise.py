@@ -87,27 +87,28 @@ def a1_coefficient(breakFreq, sampleRate):
 
 def allpassBasedFilter(input, cutoff, sampleRate, highpass=False, amplitude=1.0):
     allpassOutput = np.zeros_like(input)
+    
     dn_1 = 0
 
     for i in range(input.shape[0]):
         a1 = a1_coefficient(cutoff[i], sampleRate)
-        allpassOutput[i] = input[i] + dn_1
+        allpassOutput[i] = a1 * input[i] + dn_1
         dn_1 = input[i] - a1 * allpassOutput[i]
 
     if highpass:
         allpassOutput *= -1
 
     filterOutput = input + allpassOutput
-    filterOutput *= 0.5
-    filterOutput *= amplitude
+    filterOutput = filterOutput * 0.5
+    filterOutput = filterOutput * amplitude
 
     return filterOutput
 
 
 # Based off of https://thewolfsound.com/allpass-based-lowpass-and-highpass-filters/
-def lowPassFilter(sampleRate, duration):
-    inputSignal = generateWhiteNoise(duration, sampleRate)
-    cutoff = np.full(inputSignal.shape[0], 3000)
+def lowPassFilter(inputSignal, sampleRate, cutoffFrequency):
+    # inputSignal = generateWhiteNoise(duration, sampleRate)
+    cutoff = np.full(inputSignal.shape[0], cutoffFrequency)
     output = allpassBasedFilter(inputSignal, cutoff, sampleRate, False, amplitude=0.1)
     return output
 
@@ -162,9 +163,7 @@ def normalize(audioData):
     
 # p < 0.001 recommended
 def cutoutEffect(audioData, probability = 0.0003):
-    # audioData, sr = librosa.load(audioInputFile[0])
     length = len(audioData)
-
     cut = np.random.choice([0,1],length,p=[probability,1 - probability])
     i = 0
     
@@ -184,7 +183,7 @@ def cutoutEffect(audioData, probability = 0.0003):
     
 def delayFilter(delayTime = 500, feedback = 0.4):
     audioData, sr = librosa.load(audioInputFile[0])
-    
+
     geometric = np.geomspace(1, 2, audioData.shape[0])
     geometric -= 1
 
@@ -216,16 +215,36 @@ def phoneEffect():
     audioData *= (max / newMax)
     sf.write("phone.wav", audioData, sr)
 
+def generateMechanicalWhirr(frequency, duration, sampleRate, lowpassFrequency):
+    audioData = generateSineWave(frequency, duration, sampleRate)
+    audioData += generateSineWave(int(frequency * 1.5), duration, sampleRate)
+    audioData = audioData + generateWhiteNoise(duration, sampleRate)
+    audioData = lowPassFilter(audioData, sampleRate, lowpassFrequency)
+    audioData = audioData + generateWhiteNoise(duration, sampleRate)
+    # pitchShifted = librosa.effects.pitch_shift(audioData, sr=sampleRate, n_steps=-1, bins_per_octave=12)
+    sf.write("whirr.wav", audioData, sampleRate)
+    # sf.write("pitchedWhirr.wav", pitchShifted, sampleRate)
+
+def generateSineWave(fundamentalFrequency, duration, sampleRate):
+    samples = np.linspace(0, duration, int(duration * sampleRate), endpoint=False)
+    
+    signal = np.sin(2 * np.pi * fundamentalFrequency * samples)
+    signal *= 32767
+    signal = np.int16(signal)
+    
+    return signal
+
 def main():
     parseArgs(sys.argv)
     random.seed()
     # delayFilter(500, 0.4)
-    phoneEffect()
+    # phoneEffect()
     # cutoutEffect()
     # normalize()
     # addWhiteNoise()
     # lowpassFilter(44100, 5)
     # bandPassFilter(44100, 5, 700, 3)
+    generateMechanicalWhirr(60, 5, 44100, 300)
 
 
 if __name__ == "__main__":
