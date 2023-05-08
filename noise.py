@@ -9,7 +9,15 @@ from scipy.ndimage import shift
 import librosa
 import librosa.display
 
-argVector = {"input": "samples", "output": "outputs", "white noise": 0.5, "band pass": 400}
+argVector = {
+    "input": "samples/SpeechSamples",
+    "output": "outputs",
+    "white noise": 0.5,
+    "band pass": 400,
+    "hospital directory": "samples/KaggleHospitalAmbience/Hospital\ noise\ original",
+    "nature directory": "samples/KagleAmbientNature",
+    "mechanical whirr": False,
+}
 
 global audioInputFile, outputPath
 
@@ -32,6 +40,14 @@ def parseArgs(argv):
             elif argv[i] == "-b":
                 i = i + 1
                 argVector["band pass"] = argv[i]
+            elif argv[i] == "-h":
+                i = i + 1
+                argVector["hospital directory"] = argv[i]
+            elif argv[i] == "-n":
+                i = i + 1
+                argVector["nature directory"] = argv[i]
+            elif argv[i] == "-m":
+                argVector["mechanical whirr"] = True
             else:
                 print("Failed while parsing input. Please try again")
                 exit()
@@ -87,7 +103,7 @@ def a1_coefficient(breakFreq, sampleRate):
 
 def allpassBasedFilter(input, cutoff, sampleRate, highpass=False, amplitude=1.0):
     allpassOutput = np.zeros_like(input)
-    
+
     dn_1 = 0
 
     for i in range(input.shape[0]):
@@ -109,8 +125,9 @@ def allpassBasedFilter(input, cutoff, sampleRate, highpass=False, amplitude=1.0)
 def lowPassFilter(inputSignal, sampleRate, cutoffFrequency):
     # inputSignal = generateWhiteNoise(duration, sampleRate)
     cutoff = np.full(inputSignal.shape[0], cutoffFrequency)
-    output = allpassBasedFilter(inputSignal, cutoff, sampleRate, False, amplitude=0.1)
+    output = allpassBasedFilter(inputSignal, cutoff, sampleRate, False, amplitude=0.01)
     return output
+
 
 def secondOrderAllpassFilter(breakFreq, bandwidth, sampleRate):
     tan = np.tan(np.pi * bandwidth / sampleRate)
@@ -154,19 +171,20 @@ def bandPassFilter(inputSignal, sampleRate, centerFrequency, Q):
 def normalize(audioData):
     max = np.max(audioData)
     min = np.min(audioData)
-    
+
     peak = np.absolute(max) if np.absolute(max) > np.absolute(min) else np.absolute(min)
-    
+
     scale = 1 / peak
     audioData *= scale
     return audioData
-    
+
+
 # p < 0.001 recommended
-def cutoutEffect(audioData, probability = 0.0003):
+def cutoutEffect(audioData, probability=0.0003):
     length = len(audioData)
-    cut = np.random.choice([0,1],length,p=[probability,1 - probability])
+    cut = np.random.choice([0, 1], length, p=[probability, 1 - probability])
     i = 0
-    
+
     while i < length:
         if cut[i] == 0:
             randomLength = random.randrange(int(length * probability * 50))
@@ -176,12 +194,12 @@ def cutoutEffect(audioData, probability = 0.0003):
                 cut[i] = 0
                 i += 1
         i += 1
-    
+
     audioData *= cut
     return audioData
-    
-    
-def delayFilter(delayTime = 500, feedback = 0.4):
+
+
+def delayFilter(delayTime=500, feedback=0.4):
     audioData, sr = librosa.load(audioInputFile[0])
 
     geometric = np.geomspace(1, 2, audioData.shape[0])
@@ -189,20 +207,21 @@ def delayFilter(delayTime = 500, feedback = 0.4):
 
     delayPoint = int((delayTime * sr) / 1000)
     iteration = 1
-    
+
     rawAudio = np.copy(audioData)
-    
+
     while feedback < 1:
         delayAmount = geometric[int(len(geometric) * feedback)]
         delayAudio = rawAudio * delayAmount
         delayAudio = shift(delayAudio, (delayPoint * iteration), cval=0)
-        
+
         audioData += delayAudio
         feedback *= feedback + 1
         iteration += 1
-    
+
     return audioData
-    
+
+
 def phoneEffect():
     audioData, sr = librosa.load(audioInputFile[0])
     max = np.max(audioData)
@@ -210,10 +229,11 @@ def phoneEffect():
     audioData = cutoutEffect(audioData)
     audioData = bandPassFilter(audioData, sr, 2000, 3)
     audioData = bandPassFilter(audioData, sr, 400, 3)
-    
+
     newMax = np.max(audioData)
-    audioData *= (max / newMax)
-    sf.write("phone.wav", audioData, sr)
+    audioData *= max / newMax
+    return audioData
+
 
 def generateMechanicalWhirr(frequency, duration, sampleRate, lowpassFrequency):
     audioData = generateSineWave(frequency, duration, sampleRate)
@@ -221,30 +241,32 @@ def generateMechanicalWhirr(frequency, duration, sampleRate, lowpassFrequency):
     audioData = audioData + generateWhiteNoise(duration, sampleRate)
     audioData = lowPassFilter(audioData, sampleRate, lowpassFrequency)
     audioData = audioData + generateWhiteNoise(duration, sampleRate)
-    # pitchShifted = librosa.effects.pitch_shift(audioData, sr=sampleRate, n_steps=-1, bins_per_octave=12)
-    sf.write("whirr.wav", audioData, sampleRate)
-    # sf.write("pitchedWhirr.wav", pitchShifted, sampleRate)
+    audioData = audioData * 0.1
+    return audioData
+
 
 def generateSineWave(fundamentalFrequency, duration, sampleRate):
     samples = np.linspace(0, duration, int(duration * sampleRate), endpoint=False)
-    
+
     signal = np.sin(2 * np.pi * fundamentalFrequency * samples)
     signal *= 32767
     signal = np.int16(signal)
-    
+
     return signal
+
+
+def nextRoomEffect(audioData, sampleRate):
+    cutoffFrequency = 200
+    audioData = lowPassFilter(audioData, sampleRate, cutoffFrequency)
+    sf.write("nextRoomWhirr.wav", audioData, 44100)
+
 
 def main():
     parseArgs(sys.argv)
     random.seed()
-    # delayFilter(500, 0.4)
-    # phoneEffect()
-    # cutoutEffect()
-    # normalize()
-    # addWhiteNoise()
-    # lowpassFilter(44100, 5)
-    # bandPassFilter(44100, 5, 700, 3)
-    generateMechanicalWhirr(60, 5, 44100, 300)
+    audioData = generateMechanicalWhirr(60, 5, 44100, 300)
+    sf.write("whirr.wav", audioData, 44100)
+    nextRoomEffect(audioData, 44100)
 
 
 if __name__ == "__main__":
