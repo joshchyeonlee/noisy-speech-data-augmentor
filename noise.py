@@ -14,13 +14,16 @@ argVector = {
     "output": "outputs",
     "white noise": 0.5,
     "band pass": 400,
-    "hospital directory": "samples/KaggleHospitalAmbience/Hospital\ noise\ original",
-    "nature directory": "samples/KagleAmbientNature",
+    "hospital directory": False,
+    "nature directory": False,
     "mechanical whirr": False,
 }
 
 global audioInputFile, outputPath
-
+global hospitalDirectory, natureDirectory
+hospitalDirectory = "samples/KaggleHospitalAmbience/Hospital noise original/Hospital noise original/*.wav"
+# hospitalDirectory = "samples/KaggleHospitalAmbience/Hospital\ noise\ original/*.wav"
+natureDirectory = "samples/KagleAmbientNature/*.wav"
 
 def parseArgs(argv):
     print("Parsing Arguments")
@@ -41,11 +44,9 @@ def parseArgs(argv):
                 i = i + 1
                 argVector["band pass"] = argv[i]
             elif argv[i] == "-h":
-                i = i + 1
-                argVector["hospital directory"] = argv[i]
+                argVector["hospital directory"] = True
             elif argv[i] == "-n":
-                i = i + 1
-                argVector["nature directory"] = argv[i]
+                argVector["nature directory"] = True
             elif argv[i] == "-m":
                 argVector["mechanical whirr"] = True
             else:
@@ -68,8 +69,7 @@ def parseArgs(argv):
         os.makedirs(outputPath)
 
 
-def addWhiteNoise():
-    audioData, sr = librosa.load(audioInputFile[0])
+def addWhiteNoise(audioData, sr):
     max = np.max(audioData)
     min = np.min(audioData)
 
@@ -225,7 +225,7 @@ def delayFilter(delayTime=500, feedback=0.4):
 def phoneEffect():
     audioData, sr = librosa.load(audioInputFile[0])
     max = np.max(audioData)
-    print(max)
+    # print(max)
     audioData = cutoutEffect(audioData)
     audioData = bandPassFilter(audioData, sr, 2000, 3)
     audioData = bandPassFilter(audioData, sr, 400, 3)
@@ -258,15 +258,54 @@ def generateSineWave(fundamentalFrequency, duration, sampleRate):
 def nextRoomEffect(audioData, sampleRate):
     cutoffFrequency = 200
     audioData = lowPassFilter(audioData, sampleRate, cutoffFrequency)
-    sf.write("nextRoomWhirr.wav", audioData, 44100)
+    return audioData
 
+def addBackgroundNoise(inputAudioData, backgroundNoise, balance):
+    adjusted = adjustLength(inputAudioData, backgroundNoise)
+    adjustedBackgroundNoise = adjusted * balance
+    outputData = inputAudioData + adjustedBackgroundNoise
+    return outputData
+
+def adjustLength(audio1, audio2):
+    len1 = audio1.shape[0]
+    len2 = audio2.shape[0]
+    diff = len1 - len2
+    
+    if diff <= 0:
+        return audio2
+    
+    output = np.pad(audio2, (0, diff), 'constant')
+    return output
 
 def main():
     parseArgs(sys.argv)
     random.seed()
-    audioData = generateMechanicalWhirr(60, 5, 44100, 300)
-    sf.write("whirr.wav", audioData, 44100)
-    nextRoomEffect(audioData, 44100)
+    inputDirectory = argVector["input"] + "/*.wav"
+    audioFilePaths = glob(inputDirectory)
+    hospitalFileAudioPaths = glob(hospitalDirectory)
+    natureFileAudioPaths = glob(natureDirectory)
+    
+    for audioFile in audioFilePaths:
+        audioData, sr = librosa.load(audioFile)
+        audioData = normalize(audioData)
+        fileName = audioFile.split("/")[-1]
+        fileNameParsed = fileName.split(".")[0]
+
+        if(argVector["hospital directory"]):
+            for hospitalAudio in hospitalFileAudioPaths:
+                hospitalAudioData, hospitalSR = librosa.load(hospitalAudio)
+                randomBalance = round(random.uniform(1,0, 1.0), 2)
+                outputAudioData = addBackgroundNoise(audioData, hospitalAudioData, randomBalance)
+                
+                sampleRate = sr if sr < hospitalSR else hospitalSR
+                
+                hospitalAudioFileName = hospitalAudio.split("/")[-1].split(".")[0]
+                outputFileName = fileNameParsed+"+"+hospitalAudioFileName+"_bal="+str(randomBalance)+".wav"
+                sf.write(outputFileName, outputAudioData, sampleRate)
+        
+    # audioData = generateMechanicalWhirr(60, 5, 44100, 300)
+    # sf.write("whirr.wav", audioData, 44100)
+    # nextRoomEffect(audioData, 44100)
 
 
 if __name__ == "__main__":
