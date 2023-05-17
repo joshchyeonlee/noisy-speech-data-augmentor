@@ -14,16 +14,15 @@ argVector = {
     "output": "outputs",
     "white noise": 0.5,
     "band pass": 400,
-    "hospital directory": False,
-    "nature directory": False,
+    "noise": "",
+    #samples/KaggleHospitalAmbience/Hospital\ noise\ original/Hospital\ noise\ original
     "mechanical whirr": False,
+    "room": False,
+    "cutout": False,
+    "delay": False,
 }
 
-global audioInputFile, outputPath
-global hospitalDirectory, natureDirectory
-hospitalDirectory = "samples/KaggleHospitalAmbience/Hospital noise original/Hospital noise original/*.wav"
-# hospitalDirectory = "samples/KaggleHospitalAmbience/Hospital\ noise\ original/*.wav"
-natureDirectory = "samples/KagleAmbientNature/*.wav"
+global inputAudioFiles, outputPath, noiseAudioFiles, noisePath
 
 def parseArgs(argv):
     print("Parsing Arguments")
@@ -37,18 +36,20 @@ def parseArgs(argv):
             elif argv[i] == "-o":
                 i = i + 1
                 argVector["output"] = argv[i]
+            elif argv[i] == "-n":
+                i = i + 1
+                argVector["noise"] = argv[i]
+                print(argv[i])
             elif argv[i] == "-w":
                 i = i + 1
                 argVector["white noise"] = argv[i]
             elif argv[i] == "-b":
                 i = i + 1
                 argVector["band pass"] = argv[i]
-            elif argv[i] == "-h":
-                argVector["hospital directory"] = True
-            elif argv[i] == "-n":
-                argVector["nature directory"] = True
             elif argv[i] == "-m":
                 argVector["mechanical whirr"] = True
+            elif argv[i] == "-r":
+                argVector["room"] = True
             else:
                 print("Failed while parsing input. Please try again")
                 exit()
@@ -59,14 +60,21 @@ def parseArgs(argv):
 
     print(argVector)
 
-    global audioInputFile
-    audioInputFile = glob(argVector["input"] + "/*.wav")
+    global inputAudioFiles
+    inputAudioFiles = glob(os.path.join(argVector["input"], "*.wav"))
 
     global outputPath
     outputPath = os.path.join(".", argVector["output"])
+    
+    global noiseAudioFiles, noisePath
+    noisePath = os.path.join(".", argVector["noise"])
+    noiseAudioFiles = glob(os.path.join(noisePath, "*.wav"))
 
     if not os.path.exists(outputPath):
         os.makedirs(outputPath)
+        
+    if argVector["noise"] != "" and not os.path.exists(noisePath):
+            print("Failed parsing noise path. Omitting.")
 
 
 def addWhiteNoise(audioData, sr):
@@ -80,15 +88,6 @@ def addWhiteNoise(audioData, sr):
     for i in range(len(audioData)):
         rand = random.uniform(negThreshold, threshold)
         outputData[i] = outputData[i] + rand
-
-    outputFilePath = (
-        outputPath
-        + "/"
-        + "white_"
-        + str(argVector["white noise"])
-        + os.path.basename(audioInputFile[0])
-    )
-    sf.write(outputFilePath, outputData, sr)
 
 
 def generateWhiteNoise(duration, sampleRate):
@@ -123,7 +122,6 @@ def allpassBasedFilter(input, cutoff, sampleRate, highpass=False, amplitude=1.0)
 
 # Based off of https://thewolfsound.com/allpass-based-lowpass-and-highpass-filters/
 def lowPassFilter(inputSignal, sampleRate, cutoffFrequency):
-    # inputSignal = generateWhiteNoise(duration, sampleRate)
     cutoff = np.full(inputSignal.shape[0], cutoffFrequency)
     output = allpassBasedFilter(inputSignal, cutoff, sampleRate, False, amplitude=0.01)
     return output
@@ -222,10 +220,8 @@ def delayFilter(delayTime=500, feedback=0.4):
     return audioData
 
 
-def phoneEffect():
-    audioData, sr = librosa.load(audioInputFile[0])
+def phoneEffect(audioData, sr):
     max = np.max(audioData)
-    # print(max)
     audioData = cutoutEffect(audioData)
     audioData = bandPassFilter(audioData, sr, 2000, 3)
     audioData = bandPassFilter(audioData, sr, 400, 3)
@@ -280,35 +276,61 @@ def adjustLength(audio1, audio2):
 def main():
     parseArgs(sys.argv)
     random.seed()
-    inputDirectory = argVector["input"] + "/*.wav"
-    audioFilePaths = glob(inputDirectory)
-    hospitalFileAudioPaths = glob(hospitalDirectory)
-    natureFileAudioPaths = glob(natureDirectory)
     
-    for audioFile in audioFilePaths:
+    for audioFile in inputAudioFiles:
         audioData, sr = librosa.load(audioFile)
         audioData = normalize(audioData)
         fileName = audioFile.split("/")[-1]
         fileNameParsed = fileName.split(".")[0]
-
-        if(argVector["hospital directory"]):
-            for hospitalAudio in hospitalFileAudioPaths:
-                hospitalAudioData, hospitalSR = librosa.load(hospitalAudio)
+        
+        if(argVector["noise"] != ""):
+            for noiseAudio in noiseAudioFiles:
+                noiseAudioData, noiseSR = librosa.load(noiseAudio)
                 randomBalance = round(random.uniform(0.1, 1.0), 2)
-                outputAudioData = addBackgroundNoise(audioData, hospitalAudioData, randomBalance)
                 
-                sampleRate = sr if sr < hospitalSR else hospitalSR
+                outputAudioData = addBackgroundNoise(audioData, noiseAudioData, randomBalance)
                 
-                hospitalAudioFileName = hospitalAudio.split("/")[-1].split(".")[0]
-                outputFileName = fileNameParsed+"+"+hospitalAudioFileName+"_bal="+str(randomBalance)+".wav"
-                outputFilePath = os.path.join(argVector["output"], outputFileName)
+                sampleRate = sr if sr < noiseSR else noiseSR
+                noiseAudioFileName = noiseAudio.split("/")[-1].split(".")[0]
+                outputFileName = fileNameParsed+"+"+noiseAudioFileName+"_bal="+str(randomBalance)+".wav"
+                outputFilePath = os.path.join(outputPath, "noise")
+                
+                if not os.path.exists(outputFilePath):
+                    os.makedirs(outputFilePath)
+                
+                outputFilePath = os.path.join(outputFilePath, outputFileName)
                 sf.write(outputFilePath, outputAudioData, sampleRate)
                 break
+            
+        if(argVector["mechanical whirr"]):
+            randomFreq = random.randint(40, 100)
+            audioLen = audioData.shape[0] / sr
+            randLowPassFreq = random.randint(200, 300)
+            whirrAudio = generateMechanicalWhirr(randomFreq, audioLen, sr, randLowPassFreq)
+            randomBalance = round(random.uniform(0.1, 1.0), 2)
+            
+            whirrAudioFileName = "mechanicalWhirr_"+str(randomFreq)+"Hz+lowPass_"+str(randLowPassFreq)+"Hz.wav"
+            outputFilePath = os.path.join(outputPath, "mechanicalWhirr")
+            
+            if not os.path.exists(outputFilePath):
+                os.makedirs(outputFilePath)
+            
+            outputFilePath = os.path.join(outputFilePath, whirrAudioFileName)
+            sf.write(outputFilePath, whirrAudio, sr)
+            break
         
-    # audioData = generateMechanicalWhirr(60, 5, 44100, 300)
-    # sf.write("whirr.wav", audioData, 44100)
-    # nextRoomEffect(audioData, 44100)
-
+        if(argVector["room"]):
+            roomAudio = nextRoomEffect(audioData, sr)
+            audioFileName = "nextRoom.wav"
+            outputFilePath = os.path.join(outputPath, "nextRoom")
+            
+            if not os.path.exists(outputFilePath):
+                os.makedirs(outputFilePath)
+            
+            outputFilePath = os.path.join(outputFilePath, audioFileName)
+            
+            sf.write(outputFilePath, roomAudio, sr)
+            break
 
 if __name__ == "__main__":
     main()
