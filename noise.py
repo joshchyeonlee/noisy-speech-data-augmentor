@@ -294,14 +294,16 @@ def main():
         if(argVector["hospital directory"]):
             for hospitalAudio in hospitalFileAudioPaths:
                 hospitalAudioData, hospitalSR = librosa.load(hospitalAudio)
-                randomBalance = round(random.uniform(1,0, 1.0), 2)
+                randomBalance = round(random.uniform(0.1, 1.0), 2)
                 outputAudioData = addBackgroundNoise(audioData, hospitalAudioData, randomBalance)
                 
                 sampleRate = sr if sr < hospitalSR else hospitalSR
                 
                 hospitalAudioFileName = hospitalAudio.split("/")[-1].split(".")[0]
                 outputFileName = fileNameParsed+"+"+hospitalAudioFileName+"_bal="+str(randomBalance)+".wav"
-                sf.write(outputFileName, outputAudioData, sampleRate)
+                outputFilePath = os.path.join(argVector["output"], outputFileName)
+                sf.write(outputFilePath, outputAudioData, sampleRate)
+                break
         
     # audioData = generateMechanicalWhirr(60, 5, 44100, 300)
     # sf.write("whirr.wav", audioData, 44100)
