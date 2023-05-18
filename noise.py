@@ -50,6 +50,10 @@ def parseArgs(argv):
                 argVector["mechanical whirr"] = True
             elif argv[i] == "-r":
                 argVector["room"] = True
+            elif argv[i] == "-c":
+                argVector["cutout"] = True
+            elif argv[i] == "d":
+                argVector["delay"] = True
             else:
                 print("Failed while parsing input. Please try again")
                 exit()
@@ -70,10 +74,15 @@ def parseArgs(argv):
     noisePath = os.path.join(".", argVector["noise"])
     noiseAudioFiles = glob(os.path.join(noisePath, "*.wav"))
 
+    if not os.path.exists(argVector["input"]):
+        print("Specified input directory does not exist. Exiting")
+        exit()
+    
     if not os.path.exists(outputPath):
         os.makedirs(outputPath)
         
     if argVector["noise"] != "" and not os.path.exists(noisePath):
+            argVector["noise"] = ""
             print("Failed parsing noise path. Omitting.")
 
 
@@ -197,13 +206,11 @@ def cutoutEffect(audioData, probability=0.0003):
     return audioData
 
 
-def delayFilter(delayTime=500, feedback=0.4):
-    audioData, sr = librosa.load(audioInputFile[0])
-
+def delayFilter(audioData, sampleRate, delayTime=500, feedback=0.4):
     geometric = np.geomspace(1, 2, audioData.shape[0])
     geometric -= 1
 
-    delayPoint = int((delayTime * sr) / 1000)
+    delayPoint = int((delayTime * sampleRate) / 1000)
     iteration = 1
 
     rawAudio = np.copy(audioData)
@@ -280,6 +287,7 @@ def main():
     for audioFile in inputAudioFiles:
         audioData, sr = librosa.load(audioFile)
         audioData = normalize(audioData)
+        mixedData = audioData
         fileName = audioFile.split("/")[-1]
         fileNameParsed = fileName.split(".")[0]
         
@@ -289,6 +297,7 @@ def main():
                 randomBalance = round(random.uniform(0.1, 1.0), 2)
                 
                 outputAudioData = addBackgroundNoise(audioData, noiseAudioData, randomBalance)
+                mixedData = addBackgroundNoise(mixedData, noiseAudioData, randomBalance)
                 
                 sampleRate = sr if sr < noiseSR else noiseSR
                 noiseAudioFileName = noiseAudio.split("/")[-1].split(".")[0]
@@ -309,7 +318,10 @@ def main():
             whirrAudio = generateMechanicalWhirr(randomFreq, audioLen, sr, randLowPassFreq)
             randomBalance = round(random.uniform(0.1, 1.0), 2)
             
-            whirrAudioFileName = "mechanicalWhirr_"+str(randomFreq)+"Hz+lowPass_"+str(randLowPassFreq)+"Hz.wav"
+            outputAudioData = addBackgroundNoise(audioData, whirrAudio, randomBalance)
+            mixedData = addBackgroundNoise(mixedData, whirrAudio, randomBalance)
+            
+            whirrAudioFileName = fileNameParsed + "+mechanicalWhirr_"+str(randomFreq)+"Hz+lowPass_"+str(randLowPassFreq)+"Hz.wav"
             outputFilePath = os.path.join(outputPath, "mechanicalWhirr")
             
             if not os.path.exists(outputFilePath):
@@ -321,7 +333,8 @@ def main():
         
         if(argVector["room"]):
             roomAudio = nextRoomEffect(audioData, sr)
-            audioFileName = "nextRoom.wav"
+            mixedData = nextRoomEffect(mixedData, sr)
+            audioFileName = fileNameParsed + "+nextRoom.wav"
             outputFilePath = os.path.join(outputPath, "nextRoom")
             
             if not os.path.exists(outputFilePath):
@@ -331,6 +344,35 @@ def main():
             
             sf.write(outputFilePath, roomAudio, sr)
             break
+        
+        if(argVector["cutout"]):
+            cutoutProbability = round(random.uniform(0.0001, 0.0004), 5)
+            cutoutAudio = cutoutEffect(audioData, cutoutProbability)
+            
+            audioFileName = fileNameParsed + "+cutout_" + str(cutoutProbability) + ".wav"
+            outputFilePath = os.path.join(outputPath, "cutout")
+            
+            if not os.path.exists(outputFilePath):
+                os.makedirs(outputFilePath)
+                
+            outputFilePath = os.path.join(outputFilePath, audioFileName)
+            sf.write(outputFilePath, cutoutAudio, sr)
+        
+        if(argVector["delay"]):
+            delayTime = randint(300, 700)
+            feedback = round(random.uniform(0.1, 0.7), 2)
+            delayAudio = delayFilter(audioData, sr, delayTime, feedback)
+            
+            audioFileName = fileNameParsed + "+delay_" + str(delayTime) + "+" + str(feedback) + ".wav"
+            outputFilePath = os.path.join(outputPath, "delay")
+            
+            if not os.path.exists(outputFilePath):
+                os.makedirs(outputFilePath)
+                
+            outputFilePath = os.path.join(outputFilePath, audioFileName)
+            sf.write(outputFilePath, delayAudio, sr)
+            
+    # sf.write("mixed.wav", mixedData, sr)
 
 if __name__ == "__main__":
     main()
