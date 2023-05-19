@@ -52,7 +52,12 @@ def parseArgs(argv):
                 argVector["room"] = True
             elif argv[i] == "-c":
                 argVector["cutout"] = True
-            elif argv[i] == "d":
+            elif argv[i] == "-d":
+                argVector["delay"] = True
+            elif argv[i] == "-a":
+                argVector["mechanical whirr"] = True
+                argVector["room"] = True
+                argVector["cutout"] = True
                 argVector["delay"] = True
             else:
                 print("Failed while parsing input. Please try again")
@@ -130,9 +135,9 @@ def allpassBasedFilter(input, cutoff, sampleRate, highpass=False, amplitude=1.0)
 
 
 # Based off of https://thewolfsound.com/allpass-based-lowpass-and-highpass-filters/
-def lowPassFilter(inputSignal, sampleRate, cutoffFrequency):
+def lowPassFilter(inputSignal, sampleRate, cutoffFrequency, amplitude):
     cutoff = np.full(inputSignal.shape[0], cutoffFrequency)
-    output = allpassBasedFilter(inputSignal, cutoff, sampleRate, False, amplitude=0.01)
+    output = allpassBasedFilter(inputSignal, cutoff, sampleRate, False, amplitude=amplitude)
     return output
 
 
@@ -240,10 +245,9 @@ def phoneEffect(audioData, sr):
 
 def generateMechanicalWhirr(frequency, duration, sampleRate, lowpassFrequency):
     audioData = generateSineWave(frequency, duration, sampleRate)
-    audioData += generateSineWave(int(frequency * 1.5), duration, sampleRate)
+    audioData += generateSineWave(int(frequency / 2), duration, sampleRate)
     audioData = audioData + generateWhiteNoise(duration, sampleRate)
-    audioData = lowPassFilter(audioData, sampleRate, lowpassFrequency)
-    audioData = audioData + generateWhiteNoise(duration, sampleRate)
+    audioData = lowPassFilter(audioData, sampleRate, lowpassFrequency, 0.001)
     audioData = audioData * 0.1
     return audioData
 
@@ -259,8 +263,8 @@ def generateSineWave(fundamentalFrequency, duration, sampleRate):
 
 
 def nextRoomEffect(audioData, sampleRate):
-    cutoffFrequency = 200
-    audioData = lowPassFilter(audioData, sampleRate, cutoffFrequency)
+    cutoffFrequency = 300
+    audioData = lowPassFilter(audioData, sampleRate, cutoffFrequency, 0.1)
     return audioData
 
 def addBackgroundNoise(inputAudioData, backgroundNoise, balance):
@@ -314,11 +318,12 @@ def main():
         if(argVector["mechanical whirr"]):
             randomFreq = random.randint(40, 100)
             audioLen = audioData.shape[0] / sr
-            randLowPassFreq = random.randint(200, 300)
+            randLowPassFreq = random.randint(100, 200)
             whirrAudio = generateMechanicalWhirr(randomFreq, audioLen, sr, randLowPassFreq)
-            randomBalance = round(random.uniform(0.1, 1.0), 2)
+            randomBalance = round(random.uniform(0.1, 0.3), 3)
             
-            outputAudioData = addBackgroundNoise(audioData, whirrAudio, randomBalance)
+            normalizedAudioData = normalize(audioData)
+            outputAudioData = addBackgroundNoise(normalizedAudioData, whirrAudio, randomBalance)
             mixedData = addBackgroundNoise(mixedData, whirrAudio, randomBalance)
             
             whirrAudioFileName = fileNameParsed + "+mechanicalWhirr_"+str(randomFreq)+"Hz+lowPass_"+str(randLowPassFreq)+"Hz.wav"
@@ -328,8 +333,7 @@ def main():
                 os.makedirs(outputFilePath)
             
             outputFilePath = os.path.join(outputFilePath, whirrAudioFileName)
-            sf.write(outputFilePath, whirrAudio, sr)
-            break
+            sf.write(outputFilePath, outputAudioData, sr)
         
         if(argVector["room"]):
             roomAudio = nextRoomEffect(audioData, sr)
@@ -343,11 +347,11 @@ def main():
             outputFilePath = os.path.join(outputFilePath, audioFileName)
             
             sf.write(outputFilePath, roomAudio, sr)
-            break
         
         if(argVector["cutout"]):
-            cutoutProbability = round(random.uniform(0.0001, 0.0004), 5)
+            cutoutProbability = round(random.uniform(0.0002, 0.0005), 5)
             cutoutAudio = cutoutEffect(audioData, cutoutProbability)
+            mixedData = cutoutEffect(mixedData, cutoutProbability)
             
             audioFileName = fileNameParsed + "+cutout_" + str(cutoutProbability) + ".wav"
             outputFilePath = os.path.join(outputPath, "cutout")
@@ -359,9 +363,10 @@ def main():
             sf.write(outputFilePath, cutoutAudio, sr)
         
         if(argVector["delay"]):
-            delayTime = randint(300, 700)
+            delayTime = random.randint(300, 700)
             feedback = round(random.uniform(0.1, 0.7), 2)
             delayAudio = delayFilter(audioData, sr, delayTime, feedback)
+            mixedData = delayFilter(mixedData, sr, delayTime, feedback)
             
             audioFileName = fileNameParsed + "+delay_" + str(delayTime) + "+" + str(feedback) + ".wav"
             outputFilePath = os.path.join(outputPath, "delay")
@@ -372,7 +377,8 @@ def main():
             outputFilePath = os.path.join(outputFilePath, audioFileName)
             sf.write(outputFilePath, delayAudio, sr)
             
-    # sf.write("mixed.wav", mixedData, sr)
+        sf.write("mixed.wav", mixedData, sr)
+        return
 
 if __name__ == "__main__":
     main()
