@@ -9,10 +9,11 @@ CLI tool to take speech audio input and add noise to augment noisy speech data f
 ### Installing Dependencies
 
 This tool was written using Python 3.9.6, and the following external libraries:
-- numpy
+- numpy◊
 - soundfile
 - glob
 - scipy
+
 Each of these dependencies can be installed using `pip3 install <library-name>` or `pip install <library-name>`depending on your configurations
 
 ### Running from CLI
@@ -34,3 +35,6 @@ Noise commands:
 
 ## Ambient noise
 Ambient audio files such as the ones available on kaggle (ie. https://www.kaggle.com/datasets/nafin59/hospital-ambient-noise?resource=download) are recommended for the noise files.
+
+## Mentions
+Audio filters for low-pass and band-pass filters were modified/adadpted from code available from https://thewolfsound.com/
