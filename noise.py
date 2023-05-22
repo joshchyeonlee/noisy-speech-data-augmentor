@@ -15,7 +15,7 @@ argVector = {
     "white noise": 0.5,
     "band pass": 400,
     "noise": "",
-    # samples/KaggleHospitalAmbience/Hospital\ noise\ original/Hospital\ noise\ original
+    "all": False,
     "mechanical whirr": False,
     "room": False,
     "cutout": False,
@@ -24,9 +24,25 @@ argVector = {
 
 global inputAudioFiles, outputPath, noiseAudioFiles, noisePath
 
-
 def parseArgs(argv):
     print("Parsing Arguments")
+
+    if(len(argv) < 2):
+        print("\n\nNo arguments provided. Please indicate desired form of noise:\n\n")
+        print("Command\t| Description")
+        terminalSize = os.get_terminal_size()
+        print('-' * terminalSize.columns)
+        print("-a\t| Adds mechanical whirr, next room, cutout, and delay effects, and combines all effects")
+        print("-m\t| Adds mechanical whirr to mimic room fan noises")
+        print("-r\t| Adds muffled effect to mimic input audio coming from another room")
+        print("-c\t| Adds random cuts to the input audio to simulate packet drops")
+        print("-d\t| Adds delay/echo effect to input audio to simulate feedback or room echo")
+        print('-' * terminalSize.columns)
+        print("-n\t| Specifies directory for ambient noise samples to be added to input")
+        print("-i\t| Specifies input directory for input audio speech files. Defaults to samples/SpeechSamples")
+        print("-o\t| Specifies output directory. Creates /output by default")
+        print("\nExiting Program")
+        sys.exit()
 
     i = 1
     while i < len(argv):
@@ -36,11 +52,12 @@ def parseArgs(argv):
                 argVector["input"] = argv[i]
             elif argv[i] == "-o":
                 i = i + 1
+                if(argv[i][0] == "-" and len(argv[i]) <= 2):
+                    sys.exit()
                 argVector["output"] = argv[i]
             elif argv[i] == "-n":
                 i = i + 1
                 argVector["noise"] = argv[i]
-                print(argv[i])
             elif argv[i] == "-w":
                 i = i + 1
                 argVector["white noise"] = argv[i]
@@ -56,19 +73,18 @@ def parseArgs(argv):
             elif argv[i] == "-d":
                 argVector["delay"] = True
             elif argv[i] == "-a":
+                argVector["all"] = True
                 argVector["mechanical whirr"] = True
                 argVector["room"] = True
                 argVector["cutout"] = True
                 argVector["delay"] = True
             else:
-                print("Failed while parsing input. Please try again")
-                exit()
+                print("Failed while parsing arguments. Please try again")
+                sys.exit()
         except:
-            print("Failed while parsing input. Please try again")
-            exit()
+            print("Failed while parsing arguments. Please try again")
+            sys.exit()
         i = i + 1
-
-    print(argVector)
 
     global inputAudioFiles
     inputAudioFiles = glob(os.path.join(argVector["input"], "*.wav"))
@@ -92,7 +108,7 @@ def parseArgs(argv):
         print("Failed parsing noise path. Omitting.")
 
 
-def addWhiteNoise(audioData, sr):
+def addWhiteNoise(audioData):
     max = np.max(audioData)
     min = np.min(audioData)
 
@@ -404,11 +420,9 @@ def main():
 
             sf.write(outputFilePath, delayAudio, sr)
 
-        outputFilePath = createOutputFile(
-            outputPath, "mixed", fileNameParsed + "mixed.wav"
-        )
-        sf.write(outputFilePath, mixedData, sr)
-        return
+        if(argVector["all"]):
+            outputFilePath = createOutputFile(outputPath, "mixed", fileNameParsed + "mixed.wav")
+            sf.write(outputFilePath, mixedData, sr)
 
 
 if __name__ == "__main__":
