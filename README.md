@@ -9,7 +9,7 @@ CLI tool to take speech audio input and add noise to augment noisy speech data f
 ### Installing Dependencies
 
 This tool was written using Python 3.9.6, and the following external libraries:
-- numpy◊
+- numpy
 - soundfile
 - glob
 - scipy
@@ -22,14 +22,20 @@ The program can simply be run using `python3 noise.py`. Desired noise must be sp
 
 I/O arguments:
 `-i`: Optional. Specifies input directory for input audio speech files. Defaults to `samples/SpeechSamples`
+
 `-o`: Optional. Specifies output directory. Creates `/output` by default.
+
 `-n`: Specifies directory for ambient noise samples to be added to input. Is not included if omitted or invalid.
 
 Noise arguments:
 `-a`: Adds mechanical whirr, next room, cutout, and delay effects, and combines all effects. Output files are stored in `<specifiedFolder>/mixed`
+
 `-m`: Adds mechanical whirr to mimic room fan noises. Output files are stored in `<specifiedFolder>/mech_whirr`
+
 `-r`: Adds muffled effect to mimic input audio coming from another room. Output files are stored in `<specifiedFolder>/room`
+
 `-c`: Adds random cuts to the input audio to simulate packet drops or bad phone connection. Output files are stored in `<specifiedFolder>/cutout`
+
 `-d`: Adds delay/echo effect to input audio to simulate feedback or room echo. Output files are stored in `<specifiedFolder>/delay`
 
 ## Ambient noise
