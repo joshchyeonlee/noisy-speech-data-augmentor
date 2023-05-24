@@ -8,105 +8,62 @@ from scipy.ndimage import shift
 
 import librosa
 import librosa.display
+import argparse
 
-argVector = {
-    "input": "samples/SpeechSamples",
-    "output": "outputs",
-    "white noise": 0.5,
-    "band pass": 400,
-    "noise": "",
-    "all": False,
-    "mechanical whirr": False,
-    "room": False,
-    "cutout": False,
-    "delay": False,
-}
+global inputAudioFiles, outputPath, noiseAudioFiles, noisePath, noisePathExists
 
-global inputAudioFiles, outputPath, noiseAudioFiles, noisePath
+noisePathExists = True
 
-def parseArgs(argv):
-    print("Parsing Arguments")
 
-    if(len(argv) < 2):
-        print("\n\nNo arguments provided. Please indicate desired form of noise:\n\n")
-        print("Command\t| Description")
-        terminalSize = os.get_terminal_size()
-        print('-' * terminalSize.columns)
-        print("-a\t| Adds mechanical whirr, next room, cutout, and delay effects, and combines all effects")
-        print("-m\t| Adds mechanical whirr to mimic room fan noises")
-        print("-r\t| Adds muffled effect to mimic input audio coming from another room")
-        print("-c\t| Adds random cuts to the input audio to simulate packet drops")
-        print("-d\t| Adds delay/echo effect to input audio to simulate feedback or room echo")
-        print('-' * terminalSize.columns)
-        print("-n\t| Specifies directory for ambient noise samples to be added to input")
-        print("-i\t| Specifies input directory for input audio speech files. Defaults to samples/SpeechSamples")
-        print("-o\t| Specifies output directory. Creates /output by default")
-        print("\nExiting Program")
+def manageFiles(args):
+    global inputAudioFiles
+    
+    if args.input:
+        inputAudioFiles = glob(os.path.join(args.input, "*.wav"))
+    else:
+        inputAudioFiles = glob(os.path.join("samples/SpeechSamples", "*.wav"))
+        
+    if args.input is not None and not os.path.exists(args.input):
+        print("Specified input directory does not exist. Exiting")
         sys.exit()
 
-    i = 1
-    while i < len(argv):
-        try:
-            if argv[i] == "-i":
-                i = i + 1
-                argVector["input"] = argv[i]
-            elif argv[i] == "-o":
-                i = i + 1
-                if(argv[i][0] == "-" and len(argv[i]) <= 2):
-                    sys.exit()
-                argVector["output"] = argv[i]
-            elif argv[i] == "-n":
-                i = i + 1
-                argVector["noise"] = argv[i]
-            elif argv[i] == "-w":
-                i = i + 1
-                argVector["white noise"] = argv[i]
-            elif argv[i] == "-b":
-                i = i + 1
-                argVector["band pass"] = argv[i]
-            elif argv[i] == "-m":
-                argVector["mechanical whirr"] = True
-            elif argv[i] == "-r":
-                argVector["room"] = True
-            elif argv[i] == "-c":
-                argVector["cutout"] = True
-            elif argv[i] == "-d":
-                argVector["delay"] = True
-            elif argv[i] == "-a":
-                argVector["all"] = True
-                argVector["mechanical whirr"] = True
-                argVector["room"] = True
-                argVector["cutout"] = True
-                argVector["delay"] = True
-            else:
-                print("Failed while parsing arguments. Please try again")
-                sys.exit()
-        except:
-            print("Failed while parsing arguments. Please try again")
-            sys.exit()
-        i = i + 1
-
-    global inputAudioFiles
-    inputAudioFiles = glob(os.path.join(argVector["input"], "*.wav"))
-
     global outputPath
-    outputPath = os.path.join(".", argVector["output"])
-
-    global noiseAudioFiles, noisePath
-    noisePath = os.path.join(".", argVector["noise"])
-    noiseAudioFiles = glob(os.path.join(noisePath, "*.wav"))
-
-    if not os.path.exists(argVector["input"]):
-        print("Specified input directory does not exist. Exiting")
-        exit()
-
+    
+    if args.output:
+        outputPath = os.path.join(".", args.output)
+    else:
+        outputPath = os.path.join(".", "outputs")
+        
     if not os.path.exists(outputPath):
         os.makedirs(outputPath)
 
-    if argVector["noise"] != "" and not os.path.exists(noisePath):
-        argVector["noise"] = ""
-        print("Failed parsing noise path. Omitting.")
+    global noiseAudioFiles, noisePath
+    
+    if args.noise:
+        noisePath = os.path.join(".", args.noise)
+        noiseAudioFiles = glob(os.path.join(noisePath, "*.wav"))
+        if not os.path.exists(noisePath):
+            global noisePathExists
+            noisePathExists = False
+            print("Failed parsing noise path. Omitting.")
 
+
+def parseArgs():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-a','--all', action='store_true', help="add mechanical whirr, next room, cutout, and delay effects. Combines all effects")
+    parser.add_argument('-m','--mech', action='store_true', help="add mechanical whirr to mimic room fan noises")
+    parser.add_argument('-r','--room', action='store_true', help="add muffled effect to mimic input audio coming from another room")
+    parser.add_argument('-c','--cutout', action='store_true', help="add random cuts to the input audio to simulate packet drops")
+    parser.add_argument('-d','--delay', action='store_true', help="add delay/echo effect to input audio to simulate feedback or room echo")
+    parser.add_argument('-n','--noise', action='store', help="specify directory for ambient noise samples to be added to input")
+    parser.add_argument('-i','--input', action='store', help="specify input directory for input audio speech files. Defaults to samples/SpeechSamples")
+    parser.add_argument('-o','--output', action='store', help="specify output directory. Creates /output by default")
+    
+    args = parser.parse_args()
+    
+    manageFiles(args)
+    
+    return parser, args
 
 def addWhiteNoise(audioData):
     max = np.max(audioData)
@@ -318,9 +275,15 @@ def createOutputFile(outputPath, noiseType, outputFileName):
 
 
 def main():
-    parseArgs(sys.argv)
+    parser, args = parseArgs()
+        
+    if not (args.all or args.mech or args.room or args.cutout or args.delay):
+        print("\nOne of -a, -m, -r, -c, or -d required to run program. See command details below\n")
+        parser.print_help()
+        sys.exit()
+    
     random.seed()
-
+    
     for audioFile in inputAudioFiles:
         audioData, sr = librosa.load(audioFile)
         audioData = normalize(audioData)
@@ -328,7 +291,7 @@ def main():
         fileName = audioFile.split("/")[-1]
         fileNameParsed = fileName.split(".")[0]
 
-        if argVector["noise"] != "":
+        if args.noise and noisePathExists:
             for noiseAudio in noiseAudioFiles:
                 noiseAudioData, noiseSR = librosa.load(noiseAudio)
                 randomBalance = round(random.uniform(0.1, 1.0), 2)
@@ -349,11 +312,11 @@ def main():
                     + ".wav"
                 )
 
-                outputFilePath = createOutputFile(outputPath, "noies", outputFileName)
+                outputFilePath = createOutputFile(outputPath, "noise", outputFileName)
 
                 sf.write(outputFilePath, outputAudioData, sampleRate)
 
-        if argVector["mechanical whirr"]:
+        if args.mech:
             randomFreq = random.randint(40, 100)
             audioLen = audioData.shape[0] / sr
             randLowPassFreq = random.randint(100, 200)
@@ -381,7 +344,7 @@ def main():
 
             sf.write(outputFilePath, outputAudioData, sr)
 
-        if argVector["room"]:
+        if args.room:
             roomAudio = nextRoomEffect(audioData, sr)
             mixedData = nextRoomEffect(mixedData, sr)
             outputFileName = fileNameParsed + "+nextRoom.wav"
@@ -390,7 +353,7 @@ def main():
 
             sf.write(outputFilePath, roomAudio, sr)
 
-        if argVector["cutout"]:
+        if args.cutout:
             cutoutProbability = round(random.uniform(0.0002, 0.0005), 5)
             cutoutAudio = cutoutEffect(audioData, cutoutProbability)
             mixedData = cutoutEffect(mixedData, cutoutProbability)
@@ -402,7 +365,7 @@ def main():
 
             sf.write(outputFilePath, cutoutAudio, sr)
 
-        if argVector["delay"]:
+        if args.delay:
             delayTime = random.randint(300, 700)
             feedback = round(random.uniform(0.1, 0.7), 2)
             delayAudio = delayFilter(audioData, sr, delayTime, feedback)
@@ -420,7 +383,7 @@ def main():
 
             sf.write(outputFilePath, delayAudio, sr)
 
-        if(argVector["all"]):
+        if args.all:
             outputFilePath = createOutputFile(outputPath, "mixed", fileNameParsed + "mixed.wav")
             sf.write(outputFilePath, mixedData, sr)
 
