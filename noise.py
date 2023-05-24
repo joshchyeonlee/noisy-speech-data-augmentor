@@ -291,32 +291,34 @@ def main():
         fileName = audioFile.split("/")[-1]
         fileNameParsed = fileName.split(".")[0]
 
-        if args.noise and noisePathExists:
+        if (args.noise or args.all) and noisePathExists:
             for noiseAudio in noiseAudioFiles:
                 noiseAudioData, noiseSR = librosa.load(noiseAudio)
                 randomBalance = round(random.uniform(0.1, 1.0), 2)
 
-                outputAudioData = addBackgroundNoise(
-                    audioData, noiseAudioData, randomBalance
-                )
-                mixedData = addBackgroundNoise(mixedData, noiseAudioData, randomBalance)
+                if args.all:
+                    mixedData = addBackgroundNoise(mixedData, noiseAudioData, randomBalance)
+                
+                if args.noise:
+                    outputAudioData = addBackgroundNoise(audioData, noiseAudioData, randomBalance)
+                
+                    sampleRate = sr if sr < noiseSR else noiseSR
+                    noiseAudioFileName = noiseAudio.split("/")[-1].split(".")[0]
+                    outputFileName = (
+                        fileNameParsed
+                        + "+"
+                        + noiseAudioFileName
+                        + "_bal="
+                        + str(randomBalance)
+                        + ".wav"
+                    )
 
-                sampleRate = sr if sr < noiseSR else noiseSR
-                noiseAudioFileName = noiseAudio.split("/")[-1].split(".")[0]
-                outputFileName = (
-                    fileNameParsed
-                    + "+"
-                    + noiseAudioFileName
-                    + "_bal="
-                    + str(randomBalance)
-                    + ".wav"
-                )
+                    outputFilePath = createOutputFile(outputPath, "noise", outputFileName)
 
-                outputFilePath = createOutputFile(outputPath, "noise", outputFileName)
+                    sf.write(outputFilePath, outputAudioData, sampleRate)
 
-                sf.write(outputFilePath, outputAudioData, sampleRate)
-
-        if args.mech:
+        if args.mech or args.all:
+            
             randomFreq = random.randint(40, 100)
             audioLen = audioData.shape[0] / sr
             randLowPassFreq = random.randint(100, 200)
@@ -325,63 +327,70 @@ def main():
             )
             randomBalance = round(random.uniform(0.1, 0.3), 3)
 
-            normalizedAudioData = normalize(audioData)
-            outputAudioData = addBackgroundNoise(
-                normalizedAudioData, whirrAudio, randomBalance
-            )
-            mixedData = addBackgroundNoise(mixedData, whirrAudio, randomBalance)
+            if args.all:
+                mixedData = addBackgroundNoise(mixedData, whirrAudio, randomBalance)
 
-            outputFileName = (
-                fileNameParsed
-                + "+mechanicalWhirr_"
-                + str(randomFreq)
-                + "Hz+lowPass_"
-                + str(randLowPassFreq)
-                + "Hz.wav"
-            )
+            if args.mech:
+                outputFileName = (
+                    fileNameParsed
+                    + "+mechanicalWhirr_"
+                    + str(randomFreq)
+                    + "Hz+lowPass_"
+                    + str(randLowPassFreq)
+                    + "Hz.wav"
+                )
+                
+                outputAudioData = addBackgroundNoise(audioData, whirrAudio, randomBalance)
+                outputFilePath = createOutputFile(outputPath, "mech_whirr", outputFileName)
 
-            outputFilePath = createOutputFile(outputPath, "mech_whirr", outputFileName)
+                sf.write(outputFilePath, outputAudioData, sr)
 
-            sf.write(outputFilePath, outputAudioData, sr)
+        if args.room or args.all:
+            if args.all:
+                mixedData = nextRoomEffect(mixedData, sr)
+            
+            if args.room:
+                roomAudio = nextRoomEffect(audioData, sr)
+            
+                outputFileName = fileNameParsed + "+nextRoom.wav"
+                outputFilePath = createOutputFile(outputPath, "room", outputFileName)
+                sf.write(outputFilePath, roomAudio, sr)
 
-        if args.room:
-            roomAudio = nextRoomEffect(audioData, sr)
-            mixedData = nextRoomEffect(mixedData, sr)
-            outputFileName = fileNameParsed + "+nextRoom.wav"
-
-            outputFilePath = createOutputFile(outputPath, "room", outputFileName)
-
-            sf.write(outputFilePath, roomAudio, sr)
-
-        if args.cutout:
+        if args.cutout or args.all:
             cutoutProbability = round(random.uniform(0.0002, 0.0005), 5)
-            cutoutAudio = cutoutEffect(audioData, cutoutProbability)
-            mixedData = cutoutEffect(mixedData, cutoutProbability)
+            
+            if args.all:
+                mixedData = cutoutEffect(mixedData, cutoutProbability)
+            
+            if args.room:
+                cutoutAudio = cutoutEffect(audioData, cutoutProbability)
+                outputFileName = (
+                    fileNameParsed + "+cutout_" + str(cutoutProbability) + ".wav"
+                )
+                outputFilePath = createOutputFile(outputPath, "cutout", outputFileName)
 
-            outputFileName = (
-                fileNameParsed + "+cutout_" + str(cutoutProbability) + ".wav"
-            )
-            outputFilePath = createOutputFile(outputPath, "cutout", outputFileName)
+                sf.write(outputFilePath, cutoutAudio, sr)
 
-            sf.write(outputFilePath, cutoutAudio, sr)
-
-        if args.delay:
+        if args.delay or args.all:
             delayTime = random.randint(300, 700)
             feedback = round(random.uniform(0.1, 0.7), 2)
-            delayAudio = delayFilter(audioData, sr, delayTime, feedback)
-            mixedData = delayFilter(mixedData, sr, delayTime, feedback)
+            
+            if args.all:
+                mixedData = delayFilter(mixedData, sr, delayTime, feedback)
 
-            outputFileName = (
-                fileNameParsed
-                + "+delay_"
-                + str(delayTime)
-                + "+"
-                + str(feedback)
-                + ".wav"
-            )
-            outputFilePath = createOutputFile(outputPath, "delay", outputFileName)
+            if args.delay:
+                delayAudio = delayFilter(audioData, sr, delayTime, feedback)
+                outputFileName = (
+                    fileNameParsed
+                    + "+delay_"
+                    + str(delayTime)
+                    + "+"
+                    + str(feedback)
+                    + ".wav"
+                )
+                outputFilePath = createOutputFile(outputPath, "delay", outputFileName)
 
-            sf.write(outputFilePath, delayAudio, sr)
+                sf.write(outputFilePath, delayAudio, sr)
 
         if args.all:
             outputFilePath = createOutputFile(outputPath, "mixed", fileNameParsed + "mixed.wav")
